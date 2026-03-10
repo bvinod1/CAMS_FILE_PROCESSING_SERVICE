@@ -1,50 +1,57 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Constitution for the CAMS File Processing Service
 
-## Core Principles
+## 1. Mission Statement
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+This document outlines the foundational principles, architectural commitments, and technical standards for the CAMS File Processing Service. As the AI programming assistant, I will adhere to this constitution to ensure all generated code, advice, and modifications align with the project's strategic goals of scalability, reliability, security, and compliance.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+## 2. Core Architectural Principles
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+1.  **Event-Driven First**: The system will be built on an event-driven, queue-based architecture. All long-running processes (scanning, validation, record processing) must be decoupled and triggered by asynchronous messages, preferably via GCP Pub/Sub. This is the primary pattern for ensuring scalability and resilience.
+2.  **Asynchronous Processing is Mandatory**: No synchronous, blocking operations are permitted for file processing tasks. The initial file upload will be offloaded directly to GCS via pre-signed URLs. The API will respond immediately, and the workflow will proceed in the background.
+3.  **Horizontal Scalability by Design**: All processing components (workers) must be stateless and designed to scale horizontally. We will leverage Google Kubernetes Engine (GKE) with Horizontal Pod Autoscaling (HPA) as the primary deployment target.
+4.  **Reliability Through Idempotency and State**: Every process must be idempotent to support at-least-once message delivery. State transitions must be persisted transactionally to a durable database (Spanner) using the Spring State Machine pattern. Dead-letter queues (DLQs) are required for handling terminal failures.
+5.  **Spec-Driven Development**: The API contract is king. Development will follow a spec-driven approach using OpenAPI. All API changes must begin with a modification to the `openapi.yaml` specification.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+## 3. The Architectural Blueprint
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+I will follow the "Event-Driven Queue Architecture" as the canonical design.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+-   **Ingress**: A REST API (`File Upload Service`) provides a pre-signed URL for direct GCS upload. It does not handle file streams. Upon client confirmation of upload, it publishes a `FILE_UPLOADED` event to Pub/Sub.
+-   **Storage**: GCS is the source of truth for files, segregated into `quarantine`, `clean`, and `failed` buckets.
+-   **Messaging**: GCP Pub/Sub is the central nervous system for orchestrating the workflow between microservices.
+-   **Processing Workers**:
+    1.  **Scan Service**: A dedicated worker (or Cloud Function) listens for new files, performs malware scanning, moves the file, and publishes the result.
+    2.  **Validation Service**: A worker consumes `SCANNED_CLEAN` events, validates file headers against dynamic templates stored in the database, and publishes the result.
+    3.  **Record Processing Service**: A worker consumes `VALIDATION_SUCCESS` events, uses Spring Batch to process records in partitioned chunks, calls the external synchronous endpoint, and tracks record-level status.
+-   **State Management**:
+    -   **File State**: A `FileStatus` entity will be managed by a Spring State Machine, with its state persisted in Cloud Spanner.
+    -   **Record State**: A `RecordStatus` entity will track the status of individual records, also in Spanner, to support audit and reporting requirements.
+-   **Frontend**: The React frontend will poll a `Tracker Service` API for file and record-level status updates.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+## 4. Approved Technology Stack
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+I will generate code and provide solutions using only the following approved technologies:
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+| Layer      | Technology                               | Rationale                                    |
+| :--------- | :--------------------------------------- | :------------------------------------------- |
+| **Core**   | Spring Boot 3.x + WebFlux                | High-throughput, non-blocking I/O.           |
+| **Queue**  | GCP Pub/Sub + Spring Cloud GCP           | Native, scalable, and integrated messaging.  |
+| **Batch**  | Spring Batch                             | Robust, fault-tolerant chunk processing.     |
+| **State**  | Spring State Machine + Cloud Spanner     | Transactional FSM persistence, strong consistency. |
+| **Scan**   | ClamAV (Docker sidecar) or VirusTotal API | Integrable and standard security scanning.   |
+| **Deploy** | GKE + Istio                              | Managed Kubernetes for autoscaling and mesh. |
+| **Specs**  | OpenAPI 3.0 (SpecKit) + JUnit 5          | Contract-first development and testing.      |
+| **Frontend**| React                                    | For the status dashboard UI.                 |
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+## 5. Non-Functional Requirements (Mandatory Checks)
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+I must ensure my suggestions and code adhere to these critical requirements:
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+-   **Security**: All uploads must be scanned for malware. PII must be redacted from logs. File integrity must be verified with checksums at key stages.
+-   **Compliance**: An immutable audit trail for every file and record state transition must be maintained for 7 years. Data lineage must be traceable.
+-   **Performance**: The end-to-end processing time for a 1M record file must target **< 2 hours (p95)**. API endpoints must respond in **< 200ms (p99)**.
+-   **Fairness**: The system must support priority queues (e.g., P0 for NAV files) to prevent starvation and meet SLAs.
+-   **Observability**: Code must include support for distributed tracing, structured logging (JSON), and custom metrics for monitoring key business operations (e.g., files/min, record sync rate).
+-   **Reliability**: All external calls must be wrapped in a Circuit Breaker (Resilience4j) with exponential backoff and retry policies.
+
+This constitution is the source of truth for my behavior on this project. Any deviation must be explicitly requested and justified.

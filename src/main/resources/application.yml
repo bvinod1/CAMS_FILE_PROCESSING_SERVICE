@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: cams-file-processing-service
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  cloud:
+    gcp:
+      project-id: # Your GCP project ID here
+      spanner:
+        instance-id: test-instance
+        database: file-processing-db
+      # Point to emulators for local development
+      credentials:
+        encoded-key: "use-anonymous-credentials" # No auth for emulators
+      pubsub:
+        emulator-host: localhost:8085
+logging:
+  level:
+    com.cams.fileprocessing: DEBUG
+    org.springframework.web: INFO

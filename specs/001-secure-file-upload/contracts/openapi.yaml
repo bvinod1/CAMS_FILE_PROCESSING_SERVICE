@@ -1,0 +1,99 @@
+openapi: 3.0.3
+info:
+  title: CAMS File Upload Service
+  description: |-
+    API for initiating and tracking file uploads in the CAMS processing pipeline.
+  version: 1.0.0
+servers:
+  - url: https://api.cams.com/v1
+    description: Production Server
+  - url: http://localhost:8080/api/v1
+    description: Local Development Server
+tags:
+  - name: FileUpload
+    description: Operations for file upload initiation and status tracking.
+
+paths:
+  /files/upload-request:
+    post:
+      tags:
+        - FileUpload
+      summary: Request a pre-signed URL for file upload
+      description: |-
+        Initiates the file upload process. The client provides metadata about the file,
+        and the service returns a unique `fileId` and a secure, time-limited URL
+        to which the file can be uploaded directly.
+      operationId: requestUploadUrl
+      requestBody:
+        description: Metadata for the file to be uploaded.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadRequest'
+      responses:
+        '200':
+          description: Successfully generated upload URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          description: Bad Request. The request is missing required fields or is malformed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    UploadRequest:
+      type: object
+      description: Body for requesting a file upload URL.
+      required:
+        - fileName
+        - flowType
+        - checksum
+      properties:
+        fileName:
+          type: string
+          description: The name of the file to be uploaded.
+          example: "transactions_20260308.csv"
+        flowType:
+          type: string
+          description: The business process category for which the file is being uploaded.
+          example: "NAV"
+        checksum:
+          type: string
+          description: The MD5 or SHA256 checksum of the file for integrity verification.
+          example: "d41d8cd98f00b204e9800998ecf8427e"
+
+    UploadResponse:
+      type: object
+      description: Response containing the fileId and the pre-signed URL for upload.
+      properties:
+        fileId:
+          type: string
+          format: uuid
+          description: A unique identifier for this file upload process.
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        uploadUrl:
+          type: string
+          format: uri
+          description: The secure, time-limited URL to which the client should upload the file.
+          example: "https://storage.googleapis.com/cams-quarantine-bucket/..."
+
+    ErrorResponse:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
