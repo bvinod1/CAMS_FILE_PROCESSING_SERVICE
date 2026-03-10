@@ -28,10 +28,10 @@ class UploadControllerTest {
         // Given
         String fileName = "test.csv";
         String flowType = "NAV";
-        String checksum = "checksum";
+        String checksum = "d41d8cd98f00b204e9800998ecf8427e"; // valid MD5 hex
         UploadRequest uploadRequest = new UploadRequest(fileName, flowType, checksum);
 
-        UUID fileId = UUID.randomUUID();
+        String fileId = UUID.randomUUID().toString();
         URL uploadUrl = new URL("http://localhost/upload");
         UploadResponse uploadResponse = new UploadResponse(fileId, uploadUrl.toString());
 
@@ -44,7 +44,7 @@ class UploadControllerTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
-                .jsonPath("$.fileId").isEqualTo(fileId.toString())
+                .jsonPath("$.fileId").isEqualTo(fileId)
                 .jsonPath("$.uploadUrl").isEqualTo(uploadUrl.toString());
     }
 }

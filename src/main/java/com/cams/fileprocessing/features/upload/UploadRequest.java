@@ -4,6 +4,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+/**
+ * Immutable request DTO for initiating a secure file upload.
+ * All fields are validated via Bean Validation constraints before the request is processed.
+ */
 public record UploadRequest(
         @NotBlank(message = "File name cannot be blank")
         @Size(max = 1024, message = "File name cannot exceed 1024 characters")

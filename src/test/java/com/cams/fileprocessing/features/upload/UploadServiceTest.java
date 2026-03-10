@@ -34,7 +34,7 @@ class UploadServiceTest {
         // Given
         String fileName = "test.csv";
         String flowType = "NAV";
-        String checksum = "checksum";
+        String checksum = "d41d8cd98f00b204e9800998ecf8427e";
         UploadRequest uploadRequest = new UploadRequest(fileName, flowType, checksum);
 
         FileRecord savedRecord = new FileRecord();

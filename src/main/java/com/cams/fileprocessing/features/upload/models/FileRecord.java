@@ -1,10 +1,15 @@
 package com.cams.fileprocessing.features.upload.models;
 
 import com.google.cloud.Timestamp;
-import org.springframework.cloud.gcp.data.spanner.core.mapping.Column;
-import org.springframework.cloud.gcp.data.spanner.core.mapping.PrimaryKey;
-import org.springframework.cloud.gcp.data.spanner.core.mapping.Table;
+import com.google.cloud.spring.data.spanner.core.mapping.Column;
+import com.google.cloud.spring.data.spanner.core.mapping.PrimaryKey;
+import com.google.cloud.spring.data.spanner.core.mapping.Table;
 
+/**
+ * Spanner entity representing the lifecycle record of a single uploaded file.
+ * The record is created with status {@code AWAITING_UPLOAD} when a pre-signed URL is issued,
+ * and transitions through states as the file is processed.
+ */
 @Table(name = "file_records")
 public class FileRecord {
 

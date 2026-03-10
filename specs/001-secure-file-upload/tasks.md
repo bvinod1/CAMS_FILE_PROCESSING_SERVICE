@@ -56,18 +56,18 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T009 [P] [US1] Write a contract test for the `requestUploadUrl` endpoint in `src/test/java/com/cams/fileprocessing/features/upload/UploadControllerTest.java` to verify the API against `contracts/openapi.yaml`.
-- [ ] T010 [P] [US1] Write an integration test in `src/test/java/com/cams/fileprocessing/features/upload/UploadServiceTest.java` to ensure the service correctly interacts with the GCS and Spanner emulators.
+- [X] T009 [P] [US1] Write a contract test for the `requestUploadUrl` endpoint in `src/test/java/com/cams/fileprocessing/features/upload/UploadControllerTest.java` to verify the API against `contracts/openapi.yaml`.
+- [X] T010 [P] [US1] Write an integration test in `src/test/java/com/cams/fileprocessing/features/upload/UploadServiceTest.java` to ensure the service correctly interacts with the GCS and Spanner emulators.
 
 ### Implementation for User Story 1
 
-- [ ] T011 [P] [US1] Create the `FileRecord` entity based on `data-model.md` in `src/main/java/com/cams/fileprocessing/features/upload/models/FileRecord.java`.
-- [ ] T012 [P] [US1] Create the Spring Data repository interface for the `FileRecord` entity in `src/main/java/com/cams/fileprocessing/features/upload/FileRecordRepository.java`.
-- [ ] T013 [US1] Implement the `GcsService` to generate pre-signed V4 URLs in `src/main/java/com/cams/fileprocessing/gcp/GcsService.java`.
-- [ ] T014 [US1] Implement the `UploadService` to orchestrate the creation of the `FileRecord` and generation of the pre-signed URL in `src/main/java/com/cams/fileprocessing/features/upload/UploadService.java`.
-- [ ] T015 [US1] Implement the `UploadController` with the `requestUploadUrl` endpoint defined in `contracts/openapi.yaml` in `src/main/java/com/cams/fileprocessing/features/upload/UploadController.java`.
-- [ ] T016 [US1] Add input validation for the `UploadRequest` object in the `UploadController` or `UploadService`.
-- [ ] T017 [US1] Add structured logging for all operations within the upload feature.
+- [X] T011 [P] [US1] Create the `FileRecord` entity based on `data-model.md` in `src/main/java/com/cams/fileprocessing/features/upload/models/FileRecord.java`.
+- [X] T012 [P] [US1] Create the Spring Data repository interface for the `FileRecord` entity in `src/main/java/com/cams/fileprocessing/features/upload/FileRecordRepository.java`.
+- [X] T013 [US1] Implement the `GcsService` to generate pre-signed V4 URLs in `src/main/java/com/cams/fileprocessing/gcp/GcsService.java`.
+- [X] T014 [US1] Implement the `UploadService` to orchestrate the creation of the `FileRecord` and generation of the pre-signed URL in `src/main/java/com/cams/fileprocessing/features/upload/UploadService.java`.
+- [X] T015 [US1] Implement the `UploadController` with the `requestUploadUrl` endpoint defined in `contracts/openapi.yaml` in `src/main/java/com/cams/fileprocessing/features/upload/UploadController.java`.
+- [X] T016 [US1] Add input validation for the `UploadRequest` object in the `UploadController` or `UploadService`.
+- [X] T017 [US1] Add structured logging for all operations within the upload feature.
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -77,8 +77,8 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T018 [P] Add comprehensive Javadoc to all new public classes and methods.
-- [ ] T019 [P] Enhance unit test coverage for services and utilities.
+- [X] T018 [P] Add comprehensive Javadoc to all new public classes and methods.
+- [X] T019 [P] Enhance unit test coverage for services and utilities.
 - [ ] T020 Review and refine security rules for GCS buckets and IAM permissions for the service account.
 - [ ] T021 [P] Configure a lifecycle policy on the GCS "quarantine" bucket to automatically delete incomplete or old uploads (FR-007).
 - [ ] T022 Validate the entire workflow described in `quickstart.md` to ensure it works end-to-end.
