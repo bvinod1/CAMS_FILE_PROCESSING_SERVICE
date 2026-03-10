@@ -1,6 +1,7 @@
 package com.cams.fileprocessing.gcp;
 
 import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.HttpMethod;
 import com.google.cloud.storage.Storage;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -45,7 +46,7 @@ public class GcsService {
                 blobInfo,
                 15, // URL expiration time
                 TimeUnit.MINUTES,
-                Storage.SignUrlOption.httpMethod(Storage.HttpMethod.PUT),
+                Storage.SignUrlOption.httpMethod(HttpMethod.PUT),
                 Storage.SignUrlOption.withV4Signature(),
                 Storage.SignUrlOption.withExtHeaders(extensionHeaders)
         );
