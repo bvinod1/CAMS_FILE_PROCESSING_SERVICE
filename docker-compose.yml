@@ -1,11 +1,223 @@
+# CAMS File Processing Service — Local Development Stack
+# Provides every infrastructure dependency for the `local` Spring profile.
+#
+# Usage:
+#   docker-compose up -d          # start all services
+#   docker-compose ps             # verify health
+#   docker-compose down -v        # stop and remove volumes
+#
+# Port reference:
+#   RabbitMQ:   5672 (AMQP), 15672 (management UI — guest/guest)
+#   MinIO:      9000 (S3 API), 9001 (console — minioadmin/minioadmin)
+#   PostgreSQL: 5432 (cams/cams)
+#   ClamAV:     3310 (clamd TCP)
+#   WireMock:   8089 (stub server — mappings in ./wiremock/mappings/)
+#   SFTP:       2222 (cams/cams, upload/ directory)
+#   Prometheus: 9090
+#   Grafana:    3000 (admin/admin)
+#   Loki:       3100
+
 services:
+
+  # -----------------------------------------------------------------------
+  # Message Queue — RabbitMQ (replaces GCP Pub/Sub for local profile)
+  # -----------------------------------------------------------------------
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: cams-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: cams
+      RABBITMQ_DEFAULT_PASS: cams
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------
+  # Object Storage — MinIO (replaces GCS for local profile)
+  # -----------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: cams-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # MinIO bucket initialisation (runs once on startup)
+  minio-init:
+    image: minio/mc:latest
+    container_name: cams-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 minioadmin minioadmin;
+        mc mb --ignore-existing local/cams-quarantine;
+        mc mb --ignore-existing local/cams-clean;
+        mc mb --ignore-existing local/cams-failed;
+        echo 'MinIO buckets ready.';
+      "
+    restart: "no"
+
+  # -----------------------------------------------------------------------
+  # Relational Database — PostgreSQL (replaces Cloud Spanner for local profile)
+  # -----------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: cams-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: cams
+      POSTGRES_USER: cams
+      POSTGRES_PASSWORD: cams
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cams"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------
+  # Virus Scanner — ClamAV (same image as production sidecar)
+  # -----------------------------------------------------------------------
+  clamav:
+    image: clamav/clamav:stable
+    container_name: cams-clamav
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh || clamdscan --version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s    # ClamAV takes time to load virus database
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------
+  # External API Stub — WireMock (for third-party APIs outside our control)
+  # -----------------------------------------------------------------------
+  wiremock:
+    image: wiremock/wiremock:3.3.1
+    container_name: cams-wiremock
+    ports:
+      - "8089:8080"
+    volumes:
+      - ./wiremock:/home/wiremock
+    command: ["--global-response-templating", "--verbose"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/__admin/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------
+  # SFTP Server — for Epic 1 SFTP ingress channel testing
+  # -----------------------------------------------------------------------
+  sftp:
+    image: atmoz/sftp:latest
+    container_name: cams-sftp
+    ports:
+      - "2222:22"
+    command: cams:cams:::upload
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------
+  # Observability — Prometheus + Grafana + Loki
+  # -----------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cams-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cams-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:latest
+    container_name: cams-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+    restart: unless-stopped
+
+  # -----------------------------------------------------------------------
+  # GCP Emulators (kept for Testcontainers-based GCP profile tests)
+  # -----------------------------------------------------------------------
   spanner:
     image: gcr.io/cloud-spanner-emulator/emulator:latest
+    container_name: cams-spanner
     ports:
-      - "9010:9010" # gRPC
-      - "9020:9020" # REST
+      - "9010:9010"   # gRPC
+      - "9020:9020"   # REST
+    restart: unless-stopped
+
   pubsub:
     image: gcr.io/google.com/cloudsdktool/cloud-sdk:latest
+    container_name: cams-pubsub
     command: gcloud beta emulators pubsub start --project=test-project --host-port=0.0.0.0:8085
     ports:
       - "8085:8085"
+    restart: unless-stopped
+
+# -----------------------------------------------------------------------
+# Named Volumes
+# -----------------------------------------------------------------------
+volumes:
+  rabbitmq_data:
+  minio_data:
+  postgres_data:
+  clamav_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:

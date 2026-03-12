@@ -1,0 +1,148 @@
+# =============================================================================
+# CAMS File Processing Service — LOCAL SPRING PROFILE
+#
+# Activated by: -Dspring.profiles.active=local
+#               or SPRING_PROFILES_ACTIVE=local
+#
+# Prerequisites: docker-compose up -d  (all containers healthy)
+#
+# All infrastructure is backed by Docker containers defined in docker-compose.yml.
+# No cloud credentials, emulator keys, or VPN are required.
+# =============================================================================
+
+spring:
+
+  # ---------------------------------------------------------------------------
+  # Database — PostgreSQL (replaces Cloud Spanner)
+  # ---------------------------------------------------------------------------
+  datasource:
+    url: jdbc:postgresql://localhost:5432/cams
+    username: cams
+    password: cams
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  # ---------------------------------------------------------------------------
+  # Message Queue — RabbitMQ (replaces GCP Pub/Sub)
+  # ---------------------------------------------------------------------------
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: cams
+    password: cams
+    virtual-host: /
+    listener:
+      simple:
+        acknowledge-mode: manual
+        retry:
+          enabled: true
+          initial-interval: 1000ms
+          max-attempts: 3
+          multiplier: 2.0
+
+  # Disable Spring Cloud GCP auto-configuration — not needed for local profile
+  cloud:
+    gcp:
+      core:
+        enabled: false
+      pubsub:
+        enabled: false
+      spanner:
+        enabled: false
+
+# =============================================================================
+# CAMS Application Configuration — Local
+# =============================================================================
+cams:
+
+  storage:
+    provider: minio
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    region: us-east-1          # MinIO default
+    bucket-quarantine: cams-quarantine
+    bucket-clean: cams-clean
+    bucket-failed: cams-failed
+    signed-url-expiry-minutes: 15
+
+  messaging:
+    provider: rabbitmq
+    exchange: cams.events
+    queues:
+      file-received: cams.file.received
+      scan-result: cams.scan.result
+      validation-result: cams.validation.result
+      processing-result: cams.processing.result
+      dead-letter: cams.dlq
+
+  scan:
+    provider: clamd
+    host: localhost
+    port: 3310
+    timeout-seconds: 60
+
+  external-api:
+    base-url: http://localhost:8089
+    connect-timeout-ms: 2000
+    read-timeout-ms: 5000
+
+  secrets:
+    source: env                # Reads from environment variables / .env
+
+  processing:
+    batch:
+      chunk-size: 500
+      thread-pool-size: 4
+    priority-levels: 3         # 0=highest (NAV), 1=standard, 2=bulk
+
+# =============================================================================
+# Observability
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,loggers,env
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+      profile: local
+
+# =============================================================================
+# Logging — structured JSON for local Loki ingestion
+# =============================================================================
+logging:
+  level:
+    root: INFO
+    com.cams.fileprocessing: DEBUG
+    org.springframework.web: INFO
+    org.springframework.batch: INFO
+    org.hibernate.SQL: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
