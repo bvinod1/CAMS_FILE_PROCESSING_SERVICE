@@ -79,7 +79,13 @@
 
 - [X] T018 [P] Add comprehensive Javadoc to all new public classes and methods.
 - [X] T019 [P] Enhance unit test coverage for services and utilities.
-- [ ] T020 Review and refine security rules for GCS buckets and IAM permissions for the service account.
+- [ ] T020 **[IAM Bucket Isolation Audit]** Verify and document that GCS/MinIO IAM rules enforce the quarantine-first security model:
+  - Upload Service: WRITE-only to quarantine bucket (pre-signed URL scope restricts this automatically)
+  - Scan Worker (Epic 2): READ-only on quarantine, WRITE-only on processing bucket
+  - Validation/Processing Workers: NO access to quarantine bucket whatsoever
+  - Document the verified rules in `specs/001-secure-file-upload/data-model.md` under "IAM Bucket Access Rules"
+  - For GCP: verify via `gcloud storage buckets get-iam-policy`
+  - For local profile: update MinIO bucket policies in `docker-compose.yml` or `minio-init` service
 - [ ] T021 [P] Configure a lifecycle policy on the GCS "quarantine" bucket to automatically delete incomplete or old uploads (FR-007).
 - [ ] T022 Validate the entire workflow described in `quickstart.md` to ensure it works end-to-end.
 

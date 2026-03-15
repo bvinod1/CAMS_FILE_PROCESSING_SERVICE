@@ -7,18 +7,27 @@ CREATE TABLE IF NOT EXISTS file_records (
     original_file_name  VARCHAR(512)    NOT NULL,
     flow_type           VARCHAR(64)     NOT NULL,
     ingress_channel     VARCHAR(32)     NOT NULL DEFAULT 'REST',
-    checksum_md5        CHAR(32)        NOT NULL,
+    checksum_md5        CHAR(32),
     checksum_sha256     CHAR(64),
+    checksum            VARCHAR(255)    NOT NULL,
     status              VARCHAR(32)     NOT NULL DEFAULT 'AWAITING_UPLOAD',
     priority            SMALLINT        NOT NULL DEFAULT 1,
     gcs_bucket          VARCHAR(256),
     gcs_object_path     VARCHAR(1024),
+    scan_id             VARCHAR(36),
     created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     scanned_at          TIMESTAMPTZ,
     validated_at        TIMESTAMPTZ,
     completed_at        TIMESTAMPTZ,
-    error_message       TEXT
+    error_message       TEXT,
+
+    CONSTRAINT chk_file_status CHECK (status IN (
+        'AWAITING_UPLOAD', 'UPLOADED', 'SCANNING', 'SCANNED_CLEAN',
+        'QUARANTINED', 'SCAN_ERROR', 'VALIDATING', 'VALIDATED',
+        'VALIDATION_FAILED', 'PROCESSING', 'COMPLETED',
+        'PARTIALLY_COMPLETED', 'FAILED'
+    ))
 );
 
 CREATE TABLE IF NOT EXISTS file_status_audit (

@@ -17,8 +17,15 @@ public record UploadRequest(
         @Size(max = 255, message = "Flow type cannot exceed 255 characters")
         String flowType,
 
+        /**
+         * Client-supplied checksum for integrity verification.
+         * Accepts MD5 (32 hex characters) or SHA-256 (64 hex characters).
+         */
         @NotBlank(message = "Checksum cannot be blank")
-        @Pattern(regexp = "^[a-fA-F0-9]{32}$", message = "Checksum must be a valid MD5 hash")
+        @Pattern(
+                regexp = "^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{64}$",
+                message = "Checksum must be a valid MD5 (32 hex chars) or SHA-256 (64 hex chars) hash"
+        )
         String checksum
 ) {
 }

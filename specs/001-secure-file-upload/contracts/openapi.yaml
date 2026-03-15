@@ -3,7 +3,7 @@ info:
   title: CAMS File Upload Service
   description: |-
     API for initiating and tracking file uploads in the CAMS processing pipeline.
-  version: 1.0.0
+  version: 1.1.0
 servers:
   - url: https://api.cams.com/v1
     description: Production Server
@@ -14,15 +14,16 @@ tags:
     description: Operations for file upload initiation and status tracking.
 
 paths:
-  /files/upload-request:
+  /uploads:
     post:
       tags:
         - FileUpload
       summary: Request a pre-signed URL for file upload
       description: |-
         Initiates the file upload process. The client provides metadata about the file,
-        and the service returns a unique `fileId` and a secure, time-limited URL
-        to which the file can be uploaded directly.
+        and the service returns a unique `fileId` and a secure, time-limited (15-minute)
+        pre-signed URL to which the file can be uploaded directly to the quarantine bucket.
+        After uploading, the client MUST call POST /uploads/{fileId}/confirm.
       operationId: requestUploadUrl
       requestBody:
         description: Metadata for the file to be uploaded.
@@ -45,6 +46,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /uploads/{fileId}/confirm:
+    post:
+      tags:
+        - FileUpload
+      summary: Confirm that the file upload is complete
+      description: |-
+        Called by the client after successfully uploading the file bytes to the pre-signed URL.
+        This transitions the file record from AWAITING_UPLOAD to UPLOADED and publishes a
+        FileReceivedEvent to trigger the malware scanning pipeline (Epic 2).
+      operationId: confirmUpload
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          description: The unique file identifier returned by POST /uploads
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Upload confirmed. Scanning pipeline triggered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmUploadResponse'
+        '404':
+          description: No file record found for the given fileId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
     UploadRequest:
@@ -58,14 +91,17 @@ components:
         fileName:
           type: string
           description: The name of the file to be uploaded.
-          example: "transactions_20260308.csv"
+          example: "transactions_20260315.csv"
         flowType:
           type: string
           description: The business process category for which the file is being uploaded.
           example: "NAV"
         checksum:
           type: string
-          description: The MD5 or SHA256 checksum of the file for integrity verification.
+          description: |
+            The MD5 (32 hex chars) or SHA-256 (64 hex chars) checksum of the file
+            for integrity verification post-upload.
+          pattern: '^[a-fA-F0-9]{32}$|^[a-fA-F0-9]{64}$'
           example: "d41d8cd98f00b204e9800998ecf8427e"
 
     UploadResponse:
@@ -80,8 +116,27 @@ components:
         uploadUrl:
           type: string
           format: uri
-          description: The secure, time-limited URL to which the client should upload the file.
+          description: |
+            The secure, 15-minute time-limited URL to which the client should upload
+            the file via HTTP PUT. Call POST /uploads/{fileId}/confirm after upload.
           example: "https://storage.googleapis.com/cams-quarantine-bucket/..."
+
+    ConfirmUploadResponse:
+      type: object
+      description: Response confirming that the upload has been acknowledged and scanning triggered.
+      properties:
+        fileId:
+          type: string
+          format: uuid
+          description: The unique identifier of the confirmed file.
+        status:
+          type: string
+          description: The new status of the file record (always UPLOADED on success).
+          example: "UPLOADED"
+        confirmedAt:
+          type: string
+          format: date-time
+          description: Timestamp of the confirmation.
 
     ErrorResponse:
       type: object

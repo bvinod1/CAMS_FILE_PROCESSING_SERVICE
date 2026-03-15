@@ -42,7 +42,7 @@ As a Portfolio Manager, I want to upload 1M+ record files via signed URLs so tha
 
 -   **FR-001**: The system MUST provide a secure API endpoint for clients to request a pre-signed URL for file uploads.
 -   **FR-002**: The pre-signed URL MUST be generated for a specific object name in a designated GCS "quarantine" bucket.
--   **FR-003**: The pre-signed URL MUST have a configurable expiration time (defaulting to 24 hours).
+-   **FR-003**: The pre-signed URL MUST have a fixed expiration time of **15 minutes** (per constitution §11 security mandate). The 24-hour value previously noted here was incorrect and has been removed.
 -   **FR-004**: The system MUST create a preliminary file record in a persistent database (Spanner) when the upload URL is requested, including metadata like file name and `flow_type`.
 -   **FR-005**: The system MUST support CSV and JSON file types up to 5GB.
 -   **FR-006**: The initial API response for the pre-signed URL request MUST be faster than 200ms (p99).
