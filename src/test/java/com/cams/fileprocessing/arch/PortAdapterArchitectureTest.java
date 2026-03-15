@@ -101,4 +101,23 @@ class PortAdapterArchitectureTest {
 
         rule.check(newPackages);
     }
+
+    // -------------------------------------------------------------------------
+    // Rule 3 (T308 — Epic 3): Validation business logic isolation
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Epic 3 — ValidationService must not import infrastructure or JPA repository classes")
+    void validationBusinessLayer_mustNotDependOn_infrastructureOrJpa() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..business.validation..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage(
+                        "..infrastructure..",
+                        "org.springframework.data.jpa..",
+                        "jakarta.persistence.."
+                );
+
+        rule.check(mainClasses);
+    }
 }

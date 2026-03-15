@@ -3,7 +3,7 @@ info:
   title: CAMS File Upload Service
   description: |-
     API for initiating and tracking file uploads in the CAMS processing pipeline.
-  version: 1.1.0
+  version: 1.2.0
 servers:
   - url: https://api.cams.com/v1
     description: Production Server
@@ -12,6 +12,8 @@ servers:
 tags:
   - name: FileUpload
     description: Operations for file upload initiation and status tracking.
+  - name: Validation
+    description: Header validation template management and error reporting.
 
 paths:
   /uploads:
@@ -73,6 +75,135 @@ paths:
                 $ref: '#/components/schemas/ConfirmUploadResponse'
         '404':
           description: No file record found for the given fileId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /uploads/{fileId}/validation-errors:
+    get:
+      tags:
+        - Validation
+      summary: Get validation errors for a file
+      description: |-
+        Returns the header validation result and all field-level errors for the given file.
+        Returns 404 if no validation run has been completed for this file yet.
+        Returns 200 with an empty errors array if validation passed (PASS status).
+      operationId: getValidationErrors
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          description: The unique file identifier
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Validation result found (may contain empty errors list for PASS).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '404':
+          description: No validation result found for this fileId.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /validation-templates:
+    post:
+      tags:
+        - Validation
+      summary: Create a new validation template
+      description: |-
+        Creates a new validation template for the given flowType.
+        Any existing active template for the same flowType is deactivated.
+        New template takes effect immediately (no restart required).
+      operationId: createValidationTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidationTemplateRequest'
+      responses:
+        '201':
+          description: Template created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationTemplateResponse'
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /validation-templates/{flowType}:
+    put:
+      tags:
+        - Validation
+      summary: Update column rules for a flow type
+      description: |-
+        Replaces the column rules for the given flowType. Increments version.
+        Previous version is deactivated. New rules take effect immediately.
+      operationId: updateValidationTemplate
+      parameters:
+        - name: flowType
+          in: path
+          required: true
+          schema:
+            type: string
+          example: NAV
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidationTemplateRequest'
+      responses:
+        '200':
+          description: Template updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationTemplateResponse'
+        '400':
+          description: Invalid request body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict — template referenced by in-flight files cannot be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Validation
+      summary: Get the active validation template for a flow type
+      operationId: getValidationTemplate
+      parameters:
+        - name: flowType
+          in: path
+          required: true
+          schema:
+            type: string
+          example: NAV
+      responses:
+        '200':
+          description: Active template found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationTemplateResponse'
+        '404':
+          description: No active template exists for this flowType.
           content:
             application/json:
               schema:
@@ -152,3 +283,111 @@ components:
           type: string
         path:
           type: string
+
+    # -------------------------------------------------------
+    # Epic 3 — Header Validation Schemas
+    # -------------------------------------------------------
+
+    ValidationErrorResponse:
+      type: object
+      description: Header validation result including all field-level errors.
+      properties:
+        fileId:
+          type: string
+          format: uuid
+        flowType:
+          type: string
+          example: NAV
+        templateVersion:
+          type: integer
+        status:
+          type: string
+          enum: [PASS, FAIL, UNPARSEABLE_HEADER]
+        errorCount:
+          type: integer
+        validatedAt:
+          type: string
+          format: date-time
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationErrorDetail'
+
+    ValidationErrorDetail:
+      type: object
+      properties:
+        columnName:
+          type: string
+          nullable: true
+        position:
+          type: integer
+          description: Zero-indexed column position (-1 if unknown)
+        errorCode:
+          type: string
+          enum:
+            - MISSING_COLUMN
+            - WRONG_POSITION
+            - EXTRA_COLUMN
+            - UNPARSEABLE_HEADER
+            - NULL_NOT_ALLOWED
+            - INVALID_DATA_TYPE
+        detail:
+          type: string
+
+    ValidationTemplateRequest:
+      type: object
+      required: [flowType, columnRules]
+      properties:
+        flowType:
+          type: string
+          example: NAV
+        columnRules:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ColumnRuleRequest'
+
+    ColumnRuleRequest:
+      type: object
+      required: [name, position, dataType]
+      properties:
+        name:
+          type: string
+          example: FUND_CODE
+        position:
+          type: integer
+          minimum: 0
+        dataType:
+          type: string
+          enum: [STRING, INTEGER, DECIMAL, DATE, UUID]
+        required:
+          type: boolean
+          default: true
+        allowNull:
+          type: boolean
+          default: false
+        maxLength:
+          type: integer
+          nullable: true
+        pattern:
+          type: string
+          nullable: true
+
+    ValidationTemplateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        flowType:
+          type: string
+        version:
+          type: integer
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        columnRules:
+          type: array
+          items:
+            $ref: '#/components/schemas/ColumnRuleRequest'
