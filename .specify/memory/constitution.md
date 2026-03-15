@@ -1,6 +1,6 @@
 # CAMS File Processing Service — Platform Constitution
 
-**Version**: 2.0.0 | **Ratified**: 2026-03-12 | **Last Amended**: 2026-03-12
+**Version**: 2.1.0 | **Ratified**: 2026-03-12 | **Last Amended**: 2026-03-15
 
 ---
 
@@ -646,7 +646,57 @@ A user story is **Done** when ALL of the following are true:
 
 ---
 
-## 15. Governance
+## 15. Malware Scanning Architecture
+
+This section is the authoritative reference for the scanning pipeline implemented in Epic 2.
+
+### 15.1 Quarantine-First Pattern
+
+Every uploaded file lands in a **quarantine bucket** with restricted access. The processing pipeline has **zero IAM access** to the quarantine bucket. A file can only reach the processing bucket after passing a ClamAV clean scan. This is enforced at three independent, redundant layers:
+
+| Layer | Mechanism | Enforced By |
+|---|---|---|
+| L1 | IAM/ACL: processing service has no read access to quarantine bucket | Cloud infrastructure |
+| L2 | State machine: no `UPLOADED → VALIDATING` transition exists | Application code |
+| L3 | DB constraint: `file_records.status` can only be `SCANNED_CLEAN` before validation | Database |
+
+### 15.2 ClamAV Adapter — INSTREAM Protocol
+
+- The `ClamAvAdapter` (`infrastructure/scan/`) is **profile-agnostic** — the same code runs locally (Docker) and in GCP/AWS (GKE/ECS sidecar). Only `cams.scan.host` and `cams.scan.port` change per profile.
+- Files are **streamed** to ClamAV in 10 MB chunks via the TCP INSTREAM command. The full file is never loaded into memory and never written to the scan service's disk.
+- The blocking socket call runs on `Schedulers.boundedElastic()` — the reactive event loop is never blocked.
+- `VirusScanPort` is the only allowed import for scanning in business or feature classes (ArchUnit-enforced).
+
+### 15.3 State Transitions for Scan
+
+```
+UPLOADED
+   │
+   ▼
+SCANNING  ──[CLEAN]──► SCANNED_CLEAN ──► (continue pipeline)
+           ──[INFECTED]─► QUARANTINED  ──► Alert + DLQ
+           ──[ERROR]────► SCAN_ERROR   ──► Alert + retry/DLQ
+```
+
+### 15.4 Immutable Scan Records
+
+`scan_results` rows are INSERT-only. The database grants are: `GRANT INSERT, SELECT ON scan_results TO cams_app_user` and `REVOKE UPDATE, DELETE ON scan_results FROM cams_app_user`. Scan history is never modified.
+
+### 15.5 Signature Currency
+
+- A bi-hourly scheduled job calls `freshclam` to update virus signatures.
+- If signature age exceeds 24 hours, scans emit `ScanStatus.ERROR` and an alert is raised.
+- A Prometheus gauge `clamav_signature_age_hours` is emitted continuously.
+
+### 15.6 Testing
+
+- `ClamAvAdapterContractTest` uses `@Testcontainers` with a real `clamav/clamav:stable` container.
+- Clean file test + EICAR test virus test are mandatory (two failure scenarios per constitution §12.3).
+- No Mockito — the ClamAV socket is the real socket to the real container.
+
+---
+
+## 16. Governance
 
 This constitution supersedes all prior architectural decisions documented in this repository. Any amendment requires:
 
@@ -655,4 +705,4 @@ This constitution supersedes all prior architectural decisions documented in thi
 3. Update to the `docker-compose.yml` if new local infrastructure is introduced.
 4. Evidence that all existing tests still pass after the amendment.
 
-**Version**: 2.0.0 | **Ratified**: 2026-03-12 | **Last Amended**: 2026-03-12
+**Version**: 2.1.0 | **Ratified**: 2026-03-12 | **Last Amended**: 2026-03-15

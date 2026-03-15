@@ -34,3 +34,25 @@ CREATE TABLE IF NOT EXISTS file_status_audit (
 CREATE INDEX IF NOT EXISTS idx_file_records_status    ON file_records (status);
 CREATE INDEX IF NOT EXISTS idx_file_records_flow_type ON file_records (flow_type);
 CREATE INDEX IF NOT EXISTS idx_audit_file_id          ON file_status_audit (file_id);
+
+-- ============================================================
+-- Epic 2: Malware Scanning
+-- ============================================================
+
+-- Immutable scan results — INSERT only, UPDATE/DELETE revoked at application user level
+CREATE TABLE IF NOT EXISTS scan_results (
+    scan_id             VARCHAR(36)     PRIMARY KEY,
+    file_id             VARCHAR(36)     NOT NULL REFERENCES file_records(file_id),
+    result              VARCHAR(20)     NOT NULL,
+    virus_name          VARCHAR(256),
+    engine_version      VARCHAR(50)     NOT NULL,
+    signature_date      DATE            NOT NULL,
+    error_detail        TEXT,
+    scanned_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    scan_duration_ms    BIGINT,
+
+    CONSTRAINT chk_scan_result CHECK (result IN ('CLEAN', 'INFECTED', 'ERROR'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_scan_results_file_id ON scan_results (file_id);
+
