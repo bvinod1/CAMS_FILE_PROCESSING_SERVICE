@@ -136,6 +136,35 @@ Task: "T013 [US1] Implement the GcsService..."
 
 ---
 
+## Phase 5: US-102 — SFTP Ingress Channel
+
+**Purpose**: Enable SFTP as a second ingress channel alongside REST.
+
+- [ ] T023 [US-102] Add `sftp` service to `docker-compose.yml` using `atmoz/sftp:alpine` image; configure `inbound/` and `archive/` directories
+- [ ] T024 [P] [US-102] Add `spring-integration-sftp` dependency to `pom.xml`
+- [ ] T025 [US-102] Create `SftpIngressAdapter` that polls the SFTP `inbound/` directory on a configurable schedule (default 60s) and calls `UploadService.receiveFile()` for each new file
+- [ ] T026 [P] [US-102] Add `SFTP` to the `IngressChannel` enum / constant set used by `FileRecord.ingressChannel`
+- [ ] T027 [US-102] Implement SFTP file archiving: after successful processing, move the file from `inbound/` to `archive/{YYYY-MM-DD}/` — never delete
+- [ ] T028 [US-102] Implement SFTP idempotency: track processed file names + sizes in `file_records` — skip files already in a non-PENDING_UPLOAD state
+- [ ] T029 [US-102] Write `SftpIngressAdapterTest` using Testcontainers `atmoz/sftp` — verify file picked up, `FileRecord` created, file archived
+- [ ] T030 [US-102] Update `openapi.yaml` comments/notes to reflect that the confirm endpoint is REST-only; SFTP files skip the signed-URL flow
+
+---
+
+## Phase 6: US-103 — GCS Bucket Trigger Ingress
+
+**Purpose**: Enable GCS Pub/Sub notifications as a third ingress channel.
+
+- [ ] T031 [US-103] Create `GcsBucketTriggerAdapter` (`@Profile("gcp")`) subscribing to `CAMS_INGEST_TOPIC` via `MessageConsumerPort`; extract `objectName` and `bucketName` from the Pub/Sub notification payload
+- [ ] T032 [P] [US-103] Add `GCS_TRIGGER` to the `IngressChannel` constant set
+- [ ] T033 [US-103] Map GCS object metadata labels (`flowType`, `priority`, `sourceName`) into `FileRecord` at creation time
+- [ ] T034 [US-103] Implement deduplication: check `file_records` for existing entry with same `objectName + bucketName` before creating a new record
+- [ ] T035 [P] [US-103] Create `LocalGcsTriggerSimulatorController` (`@Profile("local")`) at `POST /api/v1/dev/gcs-trigger` enabling manual trigger without a real GCS bucket
+- [ ] T036 [US-103] Write `GcsTriggerAdapterTest` using Testcontainers Pub/Sub emulator — verify event received, `FileRecord` created with `ingressChannel=GCS_TRIGGER`
+- [ ] T037 [US-103] Write `LocalGcsTriggerSimulatorTest` — verify the local endpoint creates a `FileRecord` and publishes `FileReceivedEvent`
+
+---
+
 ## Implementation Strategy
 
 ### MVP First (User Story 1 Only)

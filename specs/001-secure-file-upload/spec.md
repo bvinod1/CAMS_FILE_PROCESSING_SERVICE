@@ -64,3 +64,53 @@ As a Portfolio Manager, I want to upload 1M+ record files via signed URLs so tha
 -   **SC-003**: The API endpoint for generating signed URLs maintains a p99 latency of less than 200ms under a load of 1000 concurrent requests.
 -   **SC-004**: 99.99% of valid files uploaded to the pre-signed URL are successfully stored in the GCS quarantine bucket and have a corresponding record created in the database.
 
+---
+
+## User Story 2 - SFTP Ingress Channel (Priority: P2)
+
+As an Operations team member, I want to drop files onto a monitored SFTP server and have them automatically ingested into the CAMS pipeline, so that legacy systems without HTTP API capability can deliver files without code changes.
+
+**Acceptance Scenarios**:
+
+1. **Given** a file is deposited into the SFTP server's `upload/` directory,
+   **When** the SFTP ingest worker polls and detects the new file,
+   **Then** the file is streamed to the quarantine bucket, a `FileRecord` is created with `ingressChannel = "SFTP"`, and a `FileReceivedEvent` is published.
+
+2. **Given** the SFTP ingest worker has processed a file,
+   **When** the transfer completes without error,
+   **Then** the file is moved to an `archive/` directory on the SFTP server so it is not re-processed on the next poll cycle.
+
+3. **Given** the file transfer to the quarantine bucket fails midway,
+   **When** the error is detected,
+   **Then** the partial upload is cleaned up, the file remains in `upload/` on the SFTP server, and the error is logged with an alert.
+
+### Functional Requirements
+
+- **FR-101**: The SFTP Ingest Worker must poll the configured SFTP `upload/` directory on a configurable interval (default 30 seconds).
+- **FR-102**: Files must be streamed from SFTP to the quarantine bucket — they must not be written to the application server's local disk.
+- **FR-103**: Processed files must be moved to `archive/` on the SFTP server (not deleted) to provide an audit trail.
+- **FR-104**: The SFTP ingest worker must be idempotent — a crash mid-transfer must not result in a duplicate `FileRecord` on restart.
+- **FR-105**: File metadata (`flowType`, `priority`) must be derivable from the SFTP directory structure (e.g. `upload/NAV/file.csv` → `flowType=NAV`) or a companion `.meta` sidecar file.
+
+---
+
+## User Story 3 - GCS Bucket Trigger Ingress (Priority: P3)
+
+As a platform engineer, I want files placed directly into the quarantine GCS bucket (e.g. by automated batch systems) to automatically enter the processing pipeline, so that systems that can write to GCS do not need to call the HTTP API.
+
+**Acceptance Scenarios**:
+
+1. **Given** a file is written directly to the quarantine GCS bucket by an external system,
+   **When** the GCS object-finalise notification is received (via Pub/Sub),
+   **Then** a `FileRecord` is created with `ingressChannel = "GCS_TRIGGER"` and a `FileReceivedEvent` is published.
+
+2. **Given** a GCS trigger notification arrives for an object that already has a `FileRecord`,
+   **When** the deduplication check runs,
+   **Then** no duplicate record is created and the event is acknowledged without processing.
+
+### Functional Requirements
+
+- **FR-106**: A GCP Pub/Sub subscription must be configured on the quarantine bucket's object-finalise notification topic.
+- **FR-107**: The GCS trigger handler must extract `flowType` and `priority` from the GCS object's metadata labels.
+- **FR-108**: Deduplication must be enforced: if a `FileRecord` with the given `gcsObjectPath` already exists, the trigger is a no-op.
+- **FR-109**: For the `local` profile, the GCS trigger is simulated by a REST endpoint `POST /internal/gcs-trigger` that accepts the object path and metadata (used by integration tests and manual local testing).
